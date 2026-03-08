@@ -1,0 +1,5 @@
+{
+  "name": "CloudLedger",
+  "description": "A simple, cloud-based personal accounting system with income, expenses, and capital tracking.",
+  "requestFramePermissions": []
+}
