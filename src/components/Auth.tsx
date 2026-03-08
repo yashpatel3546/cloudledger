@@ -1,40 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Lock, Unlock } from 'lucide-react';
+import { Lock, Unlock, Mail, Key } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-async function hashPasscode(passcode: string) {
-  const msgBuffer = new TextEncoder().encode(passcode);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 export function Auth({ children }: { children: React.ReactNode }) {
-  const { passcodeHash, isAuthenticated, setPasscode, login } = useStore();
-  const [input, setInput] = useState('');
+  const { token, isAuthenticated, login, fetchFromServer } = useStore();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const isSetup = !passcodeHash;
+  useEffect(() => {
+    if (token && !isAuthenticated) {
+      fetchFromServer();
+    }
+  }, [token, isAuthenticated, fetchFromServer]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input) return;
+    if (!email || !password) return;
 
-    const hash = await hashPasscode(input);
+    setLoading(true);
+    setError('');
 
-    if (isSetup) {
-      setPasscode(hash);
-    } else {
-      if (hash === passcodeHash) {
-        login();
-      } else {
-        setError('Incorrect passcode. Please try again.');
-        setInput('');
+    try {
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Authentication failed');
       }
+
+      // Fetch initial data after successful auth
+      const syncRes = await fetch('/api/sync', {
+        headers: {
+          'Authorization': `Bearer ${data.token}`
+        }
+      });
+      
+      const syncData = await syncRes.json();
+      login(data.token, syncData);
+
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -53,33 +73,50 @@ export function Auth({ children }: { children: React.ReactNode }) {
         <Card className="border-zinc-200/80 shadow-2xl overflow-hidden bg-white/80 backdrop-blur-xl">
           <CardHeader className="text-center space-y-4 pb-8 pt-10">
             <div className="mx-auto bg-zinc-900 w-16 h-16 rounded-2xl flex items-center justify-center text-white mb-2 shadow-lg shadow-zinc-900/20 ring-1 ring-zinc-900/5">
-              {isSetup ? <Unlock className="w-7 h-7" /> : <Lock className="w-7 h-7" />}
+              {isLogin ? <Lock className="w-7 h-7" /> : <Unlock className="w-7 h-7" />}
             </div>
             <div className="space-y-1.5">
               <CardTitle className="text-3xl font-bold font-display tracking-tight text-zinc-900">
-                {isSetup ? 'Setup Security' : 'Enter Passcode'}
+                {isLogin ? 'Welcome Back' : 'Create Account'}
               </CardTitle>
               <p className="text-sm text-zinc-500 font-medium px-6">
-                {isSetup 
-                  ? 'Create a secure passcode to encrypt and protect your accounting data.' 
-                  : 'Your accounting data is securely locked.'}
+                {isLogin 
+                  ? 'Sign in to access your secure accounting data.' 
+                  : 'Register to start managing your accounts securely.'}
               </p>
             </div>
           </CardHeader>
           <CardContent className="px-8 pb-10">
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-3">
-                <Input
-                  type="password"
-                  placeholder="Enter passcode"
-                  value={input}
-                  onChange={(e) => {
-                    setInput(e.target.value);
-                    setError('');
-                  }}
-                  className="text-center text-xl tracking-[0.2em] h-14 font-mono font-bold shadow-sm bg-zinc-50/50 border-zinc-200 focus:bg-white transition-colors"
-                  autoFocus
-                />
+              <div className="space-y-4">
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                  <Input
+                    type="email"
+                    placeholder="Email address"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError('');
+                    }}
+                    className="pl-10 h-12 bg-zinc-50/50 border-zinc-200 focus:bg-white transition-colors"
+                    required
+                  />
+                </div>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                  <Input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError('');
+                    }}
+                    className="pl-10 h-12 bg-zinc-50/50 border-zinc-200 focus:bg-white transition-colors"
+                    required
+                  />
+                </div>
                 {error && (
                   <motion.p 
                     initial={{ opacity: 0, y: -5 }} 
@@ -90,9 +127,18 @@ export function Auth({ children }: { children: React.ReactNode }) {
                   </motion.p>
                 )}
               </div>
-              <Button type="submit" className="w-full h-14 text-lg font-semibold shadow-md">
-                {isSetup ? 'Set Passcode & Enter' : 'Unlock'}
-              </Button>
+              <div className="space-y-4">
+                <Button type="submit" className="w-full h-12 text-base font-semibold shadow-md" disabled={loading}>
+                  {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setIsLogin(!isLogin)}
+                  className="w-full text-sm text-zinc-500 hover:text-zinc-900 font-medium transition-colors"
+                >
+                  {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+                </button>
+              </div>
             </form>
           </CardContent>
         </Card>

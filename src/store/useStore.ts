@@ -7,7 +7,7 @@ interface AppState {
   ledgers: Ledger[];
   vouchers: Voucher[];
   stockItems: StockItem[];
-  passcodeHash: string | null;
+  token: string | null;
   isAuthenticated: boolean;
   setCompany: (company: Company) => void;
   addLedger: (ledger: Ledger) => void;
@@ -19,9 +19,11 @@ interface AppState {
   addStockItem: (item: StockItem) => void;
   updateStockItem: (id: string, item: Partial<StockItem>) => void;
   deleteStockItem: (id: string) => void;
-  setPasscode: (hash: string) => void;
-  login: () => void;
+  setToken: (token: string | null) => void;
+  login: (token: string, data: any) => void;
   logout: () => void;
+  syncWithServer: () => Promise<void>;
+  fetchFromServer: () => Promise<void>;
 }
 
 const initialLedgers: Ledger[] = [
@@ -31,52 +33,101 @@ const initialLedgers: Ledger[] = [
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       company: {
         id: '1',
-        name: 'CloudLedger Inc.',
+        name: 'NUMERA Inc.',
         financialYearStart: '2024-04-01',
         booksBeginningFrom: '2024-04-01',
       },
       ledgers: initialLedgers,
       vouchers: [],
       stockItems: [],
-      passcodeHash: null,
+      token: null,
       isAuthenticated: false,
-      setCompany: (company) => set({ company }),
-      addLedger: (ledger) => set((state) => ({ ledgers: [...state.ledgers, ledger] })),
-      updateLedger: (id, ledger) => set((state) => ({
+      setCompany: (company) => { set({ company }); get().syncWithServer(); },
+      addLedger: (ledger) => { set((state) => ({ ledgers: [...state.ledgers, ledger] })); get().syncWithServer(); },
+      updateLedger: (id, ledger) => { set((state) => ({
         ledgers: state.ledgers.map((l) => (l.id === id ? { ...l, ...ledger } : l)),
-      })),
-      deleteLedger: (id) => set((state) => ({
+      })); get().syncWithServer(); },
+      deleteLedger: (id) => { set((state) => ({
         ledgers: state.ledgers.filter((l) => l.id !== id),
-      })),
-      addVoucher: (voucher) => set((state) => ({ vouchers: [...state.vouchers, voucher] })),
-      updateVoucher: (id, voucher) => set((state) => ({
+      })); get().syncWithServer(); },
+      addVoucher: (voucher) => { set((state) => ({ vouchers: [...state.vouchers, voucher] })); get().syncWithServer(); },
+      updateVoucher: (id, voucher) => { set((state) => ({
         vouchers: state.vouchers.map((v) => (v.id === id ? { ...v, ...voucher } : v)),
-      })),
-      deleteVoucher: (id) => set((state) => ({
+      })); get().syncWithServer(); },
+      deleteVoucher: (id) => { set((state) => ({
         vouchers: state.vouchers.filter((v) => v.id !== id),
-      })),
-      addStockItem: (item) => set((state) => ({ stockItems: [...state.stockItems, item] })),
-      updateStockItem: (id, item) => set((state) => ({
+      })); get().syncWithServer(); },
+      addStockItem: (item) => { set((state) => ({ stockItems: [...state.stockItems, item] })); get().syncWithServer(); },
+      updateStockItem: (id, item) => { set((state) => ({
         stockItems: state.stockItems.map((s) => (s.id === id ? { ...s, ...item } : s)),
-      })),
-      deleteStockItem: (id) => set((state) => ({
+      })); get().syncWithServer(); },
+      deleteStockItem: (id) => { set((state) => ({
         stockItems: state.stockItems.filter((s) => s.id !== id),
-      })),
-      setPasscode: (hash) => set({ passcodeHash: hash, isAuthenticated: true }),
-      login: () => set({ isAuthenticated: true }),
-      logout: () => set({ isAuthenticated: false }),
+      })); get().syncWithServer(); },
+      setToken: (token) => set({ token, isAuthenticated: !!token }),
+      login: (token, data) => set({ 
+        token, 
+        isAuthenticated: true,
+        company: data.company,
+        ledgers: data.ledgers,
+        vouchers: data.vouchers,
+        stockItems: data.stockItems
+      }),
+      logout: () => set({ token: null, isAuthenticated: false, company: null, ledgers: [], vouchers: [], stockItems: [] }),
+      syncWithServer: async () => {
+        const state = get();
+        if (!state.token) return;
+        try {
+          await fetch('/api/sync', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${state.token}`
+            },
+            body: JSON.stringify({
+              company: state.company,
+              ledgers: state.ledgers,
+              vouchers: state.vouchers,
+              stockItems: state.stockItems
+            })
+          });
+        } catch (err) {
+          console.error('Failed to sync with server', err);
+        }
+      },
+      fetchFromServer: async () => {
+        const state = get();
+        if (!state.token) return;
+        try {
+          const res = await fetch('/api/sync', {
+            headers: {
+              'Authorization': `Bearer ${state.token}`
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            set({
+              company: data.company,
+              ledgers: data.ledgers,
+              vouchers: data.vouchers,
+              stockItems: data.stockItems,
+              isAuthenticated: true
+            });
+          } else if (res.status === 401) {
+            set({ token: null, isAuthenticated: false });
+          }
+        } catch (err) {
+          console.error('Failed to fetch from server', err);
+        }
+      }
     }),
     {
-      name: 'tally-modern-storage',
+      name: 'numera-storage',
       partialize: (state) => ({
-        company: state.company,
-        ledgers: state.ledgers,
-        vouchers: state.vouchers,
-        stockItems: state.stockItems,
-        passcodeHash: state.passcodeHash,
+        token: state.token,
       }),
     }
   )

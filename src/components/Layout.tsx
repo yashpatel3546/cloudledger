@@ -44,9 +44,9 @@ export function Layout() {
         <div className="flex h-16 items-center border-b border-zinc-200/80 px-6">
           <div className="flex items-center gap-2.5 font-bold text-lg tracking-tight font-display">
             <div className="h-8 w-8 rounded-lg bg-zinc-900 flex items-center justify-center text-white shadow-sm shadow-zinc-900/20">
-              C
+              N
             </div>
-            CloudLedger
+            NUMERA
           </div>
         </div>
         
@@ -95,7 +95,7 @@ export function Layout() {
           </Link>
           <button onClick={logout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-200 group">
             <LogOut className="h-4 w-4 text-red-400 group-hover:text-red-600 transition-colors" />
-            Lock Session
+            Logout
           </button>
         </div>
       </aside>
@@ -104,7 +104,7 @@ export function Layout() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-zinc-50/50">
         <header className="h-16 flex items-center justify-between border-b border-zinc-200/80 bg-white/80 backdrop-blur-md px-8 sticky top-0 z-10">
           <h1 className="text-xl font-bold font-display tracking-tight text-zinc-900">
-            {navItems.find(i => i.path === location.pathname)?.name || (location.pathname === '/settings' ? 'Settings' : 'CloudLedger')}
+            {navItems.find(i => i.path === location.pathname)?.name || (location.pathname === '/settings' ? 'Settings' : 'NUMERA')}
           </h1>
           <div className="flex items-center gap-4">
             <div className="text-sm font-medium text-zinc-500 bg-zinc-100/80 px-3 py-1.5 rounded-full border border-zinc-200/50 shadow-sm">
